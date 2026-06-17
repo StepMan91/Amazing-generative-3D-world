@@ -89,16 +89,28 @@ def add_log(text: str):
     sys.stdout.write(text)
     sys.stdout.flush()
 
-def run_pipeline_thread(img_filename: str, prompt: str):
+def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd: bool, num_frames: int, guidance: float, pose_scale: float):
     global current_status, log_history
     
     stem = Path(img_filename).stem
     img_path = str(UPLOAD_DIR / img_filename)
     
-    # 0. Cleanup old outputs
-    output_video_path = WORKSPACE_ROOT / "outputs" / "zoomgs" / "videos" / f"{stem}.mp4"
-    output_gs_dir = WORKSPACE_ROOT / "outputs" / "zoomgs" / "videos" / f"{stem}_gs_ours"
+    # Define paths based on trajectory type
+    if trajectory == "preset":
+        output_video_path = WORKSPACE_ROOT / "outputs" / "zoomgs" / "videos" / f"{stem}.mp4"
+        output_gs_dir = WORKSPACE_ROOT / "outputs" / "zoomgs" / "videos" / f"{stem}_gs_ours"
+        video_url = f"/outputs/zoomgs/videos/{stem}_gs_ours/gs_trajectory.mp4"
+        ply_url = f"/outputs/zoomgs/videos/{stem}_gs_ours/reconstructed_scene.ply"
+    else:
+        output_video_path = WORKSPACE_ROOT / "outputs" / "custom_traj" / f"{stem}.mp4"
+        output_gs_dir = WORKSPACE_ROOT / "outputs" / "custom_traj" / f"{stem}_gs_ours"
+        video_url = f"/outputs/custom_traj/{stem}_gs_ours/gs_trajectory.mp4"
+        ply_url = f"/outputs/custom_traj/{stem}_gs_ours/reconstructed_scene.ply"
+        
+    # Ensure parent directory of output video exists
+    output_video_path.parent.mkdir(parents=True, exist_ok=True)
     
+    # 0. Cleanup old outputs
     if output_video_path.exists():
         try: os.remove(output_video_path)
         except Exception as e: add_log(f"[SYSTEM] Warn: failed to remove old video: {e}\n")
@@ -116,13 +128,42 @@ def run_pipeline_thread(img_filename: str, prompt: str):
         add_log("[SYSTEM] Starting Step 1: Exploration Video Generation...\n")
         current_status = {"stage": "video_gen", "percent": 5}
         
-        cmd1 = [
-            "python3", "-m", "lyra_2._src.inference.lyra2_zoomgs_inference",
-            "--input_image_path", img_path,
-            "--prompt", prompt,
-            "--use_dmd",
-            "--output_path", "outputs/zoomgs"
-        ]
+        if trajectory == "preset":
+            num_zoom_in = 81
+            num_zoom_out = max(1, num_frames - 80)
+            
+            cmd1 = [
+                "python3", "-m", "lyra_2._src.inference.lyra2_zoomgs_inference",
+                "--input_image_path", img_path,
+                "--prompt", prompt,
+                "--output_path", "outputs/zoomgs",
+                "--num_frames_zoom_in", str(num_zoom_in),
+                "--num_frames_zoom_out", str(num_zoom_out),
+                "--guidance", str(guidance),
+                "--zoom_out_strength", str(pose_scale)
+            ]
+            if use_dmd:
+                cmd1.append("--use_dmd")
+        else:
+            traj_path = WORKSPACE_ROOT / "assets" / "custom_trajectory_examples" / trajectory / "trajectory.npz"
+            captions_path = WORKSPACE_ROOT / "assets" / "custom_trajectory_examples" / trajectory / "captions.json"
+            
+            cmd1 = [
+                "python3", "-m", "lyra_2._src.inference.lyra2_custom_traj_inference",
+                "--input_image_path", img_path,
+                "--trajectory_path", str(traj_path),
+                "--output_path", "outputs/custom_traj",
+                "--num_frames", str(num_frames),
+                "--guidance", str(guidance),
+                "--pose_scale", str(pose_scale)
+            ]
+            if captions_path.exists():
+                cmd1 += ["--captions_path", str(captions_path)]
+            else:
+                cmd1 += ["--prompt", prompt]
+                
+            if use_dmd:
+                cmd1.append("--use_dmd")
         
         add_log(f"[SYSTEM] Command: {' '.join(cmd1)}\n")
         
@@ -144,9 +185,9 @@ def run_pipeline_thread(img_filename: str, prompt: str):
             # Rough progress tracking
             if "Running DA3" in line:
                 current_status["percent"] = 15
-            elif "Generating ZOOM-IN" in line:
+            elif "Generating ZOOM-IN" in line or "Generating video" in line:
                 current_status["percent"] = 25
-            elif "Generating ZOOM-OUT" in line:
+            elif "Generating ZOOM-OUT" in line or "Sampling:" in line:
                 current_status["percent"] = 35
                 
         proc1.wait()
@@ -204,13 +245,14 @@ def run_pipeline_thread(img_filename: str, prompt: str):
         current_status = {
             "stage": "completed",
             "percent": 100,
-            "video_url": f"/outputs/zoomgs/videos/{stem}_gs_ours/gs_trajectory.mp4",
-            "ply_url": f"/outputs/zoomgs/videos/{stem}_gs_ours/reconstructed_scene.ply"
+            "video_url": video_url,
+            "ply_url": ply_url
         }
         
     except Exception as e:
         add_log(f"[SYSTEM] ERROR: Pipeline execution failed: {str(e)}\n")
         current_status = {"stage": "failed", "percent": 100, "error": str(e)}
+
 
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
@@ -232,8 +274,26 @@ async def upload_image(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save uploaded image: {e}")
 
+@app.get("/api/trajectories")
+async def get_trajectories():
+    traj_dir = WORKSPACE_ROOT / "assets" / "custom_trajectory_examples"
+    trajectories = ["preset"]
+    if traj_dir.exists():
+        for item in traj_dir.iterdir():
+            if item.is_dir() and (item / "trajectory.npz").exists():
+                trajectories.append(item.name)
+    return sorted(trajectories)
+
 @app.post("/api/run")
-async def start_pipeline(filename: str = Form(...), prompt: str = Form(...)):
+async def start_pipeline(
+    filename: str = Form(...),
+    prompt: str = Form(...),
+    trajectory: str = Form(...),
+    use_dmd: bool = Form(...),
+    num_frames: int = Form(...),
+    guidance: float = Form(5.0),
+    pose_scale: float = Form(1.1)
+):
     global log_history, current_status
     
     if not (UPLOAD_DIR / filename).exists():
@@ -248,7 +308,15 @@ async def start_pipeline(filename: str = Form(...), prompt: str = Form(...)):
     
     def run_in_background():
         with pipeline_lock:
-            run_pipeline_thread(filename, prompt)
+            run_pipeline_thread(
+                filename,
+                prompt,
+                trajectory,
+                use_dmd,
+                num_frames,
+                guidance,
+                pose_scale
+            )
             
     # Run in background thread
     threading.Thread(
@@ -257,6 +325,7 @@ async def start_pipeline(filename: str = Form(...), prompt: str = Form(...)):
     ).start()
     
     return {"status": "started"}
+
 
 @app.get("/api/progress")
 async def progress_stream():

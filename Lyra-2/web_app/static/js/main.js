@@ -46,6 +46,15 @@ const gpuTempVal = document.getElementById("gpu-temp-val");
 const cpuUtilVal = document.getElementById("cpu-util-val");
 const ramUtilVal = document.getElementById("ram-util-val");
 
+// Config Input Elements
+const trajectorySelect = document.getElementById("trajectory-select");
+const dmdSelect = document.getElementById("dmd-select");
+const framesSelect = document.getElementById("frames-select");
+const guidanceInput = document.getElementById("guidance-input");
+const scaleInput = document.getElementById("scale-input");
+const advancedToggle = document.getElementById("advanced-toggle");
+const advancedPanel = document.getElementById("advanced-panel");
+
 // ---------------------------------------------------------------------------
 // 1. Chart.js Configurations
 // ---------------------------------------------------------------------------
@@ -225,11 +234,14 @@ generateBtn.addEventListener("click", async () => {
     if (!uploadedFilename) return;
     
     const prompt = promptInput.value.trim() || promptInput.placeholder;
+    const trajectory = trajectorySelect ? trajectorySelect.value : "preset";
+    const useDmd = dmdSelect ? dmdSelect.value === "true" : true;
+    const numFrames = framesSelect ? parseInt(framesSelect.value, 10) : 161;
+    const guidance = guidanceInput ? parseFloat(guidanceInput.value) : 5.0;
+    const poseScale = scaleInput ? parseFloat(scaleInput.value) : 1.1;
     
     // Disable inputs
-    generateBtn.setAttribute("disabled", "true");
-    promptInput.setAttribute("disabled", "true");
-    fileInput.setAttribute("disabled", "true");
+    disableAllInputs();
     
     // Clear logs and hide old outputs
     logTerminal.innerHTML = "";
@@ -269,6 +281,11 @@ generateBtn.addEventListener("click", async () => {
     const formData = new FormData();
     formData.append("filename", uploadedFilename);
     formData.append("prompt", prompt);
+    formData.append("trajectory", trajectory);
+    formData.append("use_dmd", useDmd);
+    formData.append("num_frames", numFrames);
+    formData.append("guidance", guidance);
+    formData.append("pose_scale", poseScale);
     
     try {
         const res = await fetch("/api/run", {
@@ -283,10 +300,10 @@ generateBtn.addEventListener("click", async () => {
         }
     } catch (err) {
         appendTerminalLog(`[SYSTEM] ERROR: Failed to launch pipeline: ${err.message}\n`);
-        generateBtn.removeAttribute("disabled");
-        promptInput.removeAttribute("disabled");
+        enableAllInputs();
     }
 });
+
 
 function connectProgressStream() {
     if (progressEventSource) {
@@ -329,7 +346,7 @@ function connectProgressStream() {
                 updateStepStatus(stepRecon, "completed");
                 showFinalOutputs(status.video_url, status.ply_url);
                 progressEventSource.close();
-                enableInputs();
+                enableAllInputs();
             } else if (status.stage === "failed") {
                 // Find active step and mark failed
                 if (stepVideo.classList.contains("active")) {
@@ -339,7 +356,7 @@ function connectProgressStream() {
                 }
                 appendTerminalLog(`\n[SYSTEM] ERROR: Pipeline failed: ${status.error}\n`);
                 progressEventSource.close();
-                enableInputs();
+                enableAllInputs();
             }
         }
     };
@@ -350,11 +367,28 @@ function connectProgressStream() {
 }
 
 // Helper: Enable Inputs after run
-function enableInputs() {
+function enableAllInputs() {
     generateBtn.removeAttribute("disabled");
     promptInput.removeAttribute("disabled");
     fileInput.removeAttribute("disabled");
+    if (trajectorySelect) trajectorySelect.removeAttribute("disabled");
+    if (dmdSelect) dmdSelect.removeAttribute("disabled");
+    if (framesSelect) framesSelect.removeAttribute("disabled");
+    if (guidanceInput) guidanceInput.removeAttribute("disabled");
+    if (scaleInput) scaleInput.removeAttribute("disabled");
 }
+
+function disableAllInputs() {
+    generateBtn.setAttribute("disabled", "true");
+    promptInput.setAttribute("disabled", "true");
+    fileInput.setAttribute("disabled", "true");
+    if (trajectorySelect) trajectorySelect.setAttribute("disabled", "true");
+    if (dmdSelect) dmdSelect.setAttribute("disabled", "true");
+    if (framesSelect) framesSelect.setAttribute("disabled", "true");
+    if (guidanceInput) guidanceInput.setAttribute("disabled", "true");
+    if (scaleInput) scaleInput.setAttribute("disabled", "true");
+}
+
 
 // Helper: Append logs to terminal
 function appendTerminalLog(text) {
@@ -484,6 +518,35 @@ function initSplatViewer(plyUrl) {
     });
 }
 
+// Load available trajectories list
+async function loadTrajectories() {
+    try {
+        const res = await fetch("/api/trajectories");
+        if (res.ok) {
+            const list = await res.json();
+            trajectorySelect.innerHTML = '<option value="preset" selected>Preset (Zoom-in / Zoom-out)</option>';
+            list.forEach(name => {
+                if (name !== "preset") {
+                    const opt = document.createElement("option");
+                    opt.value = name;
+                    opt.innerText = `Custom: ${name}`;
+                    trajectorySelect.appendChild(opt);
+                }
+            });
+        }
+    } catch (err) {
+        console.error("Failed to load trajectories:", err);
+    }
+}
+
+// Advanced toggle event
+if (advancedToggle && advancedPanel) {
+    advancedToggle.addEventListener("click", () => {
+        const isOpen = advancedToggle.classList.toggle("open");
+        advancedPanel.style.display = isOpen ? "grid" : "none";
+    });
+}
+
 // Clear Terminal logs action
 clearLogsBtn.addEventListener("click", () => {
     logTerminal.innerHTML = "";
@@ -491,3 +554,5 @@ clearLogsBtn.addEventListener("click", () => {
 
 // Initialize on page load
 connectMetricsStream();
+loadTrajectories();
+

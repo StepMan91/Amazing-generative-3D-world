@@ -634,3 +634,82 @@ h2 {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Config Grid & Inputs */
+.config-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.input-group label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.input-group select, .input-group input[type="number"] {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    color: #fff;
+    font-family: var(--font-inter);
+    font-size: 13px;
+    outline: none;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.input-group select:focus, .input-group input[type="number"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.input-group select option {
+    background: var(--bg-secondary);
+    color: #fff;
+}
+
+/* Advanced parameters toggle */
+.advanced-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--panel-border);
+    transition: var(--transition);
+    margin-top: 4px;
+}
+
+.advanced-toggle:hover {
+    color: #fff;
+}
+
+.chevron-icon {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.3s ease;
+}
+
+.advanced-toggle.open .chevron-icon {
+    transform: rotate(180deg);
+}
+
+.advanced-panel {
+    grid-template-columns: repeat(2, 1fr);
+    margin-top: 4px;
+    gap: 16px;
+}
