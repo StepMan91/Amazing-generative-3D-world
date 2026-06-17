@@ -4,6 +4,15 @@ Bienvenue dans ce fork personnalisé de **Project Lyra** (Lyra 1.0 & Lyra 2.0), 
 
 Cette version a été enrichie et configurée spécifiquement pour simplifier l'installation, optimiser le rendu 3D temps réel sur les architectures matérielles récentes (telles que NVIDIA Blackwell & Grace) et fournir une interface utilisateur moderne et interactive.
 
+<p align="center">
+  <img src="Lyra-2/assets/dashboard_screenshot.png" alt="Tableau de bord Lyra 2.0" width="800" style="border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"/>
+</p>
+
+<p align="center">
+  <video src="Lyra-2/assets/samples/demo_video.mp4" autoplay controls loop muted playsinline width="800" style="border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"></video>
+</p>
+
+
 ---
 
 ## 🎨 Vue d'ensemble et Différences avec le Dépôt Original
