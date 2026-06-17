@@ -1,7 +1,11 @@
+import * as GaussianSplats3D from 'gaussian-splats-3d';
+
 // State Variables
 let uploadedFilename = "";
 let progressEventSource = null;
 let metricsEventSource = null;
+let splatViewer = null;
+let currentPlyUrl = "";
 
 // DOM Elements
 const dropZone = document.getElementById("drop-zone");
@@ -26,6 +30,14 @@ const stepRecon = document.getElementById("step-recon");
 const outputCard = document.getElementById("output-card");
 const outputVideo = document.getElementById("output-video");
 const downloadPlyBtn = document.getElementById("download-ply-btn");
+
+// Tabs Elements
+const tabVideoBtn = document.getElementById("tab-video-btn");
+const tab3dBtn = document.getElementById("tab-3d-btn");
+const tabVideoContent = document.getElementById("tab-video-content");
+const tab3dContent = document.getElementById("tab-3d-content");
+const splatViewerContainer = document.getElementById("splat-viewer-container");
+const splatLoading = document.getElementById("splat-loading");
 
 // Resource Card Value Labels
 const gpuUtilVal = document.getElementById("gpu-util-val");
@@ -218,6 +230,30 @@ generateBtn.addEventListener("click", async () => {
     logTerminal.innerHTML = "";
     outputCard.style.display = "none";
     
+    // Reset 3D viewer state
+    currentPlyUrl = "";
+    if (splatViewer) {
+        try {
+            splatViewer.dispose();
+        } catch(e) {}
+        splatViewer = null;
+    }
+    if (splatViewerContainer) {
+        const canvases = splatViewerContainer.querySelectorAll("canvas");
+        canvases.forEach(c => c.remove());
+    }
+    if (splatLoading) {
+        splatLoading.classList.remove("hidden");
+        const loadingText = splatLoading.querySelector("p");
+        if (loadingText) loadingText.innerText = "Loading 3D Gaussian Splats...";
+    }
+    if (tabVideoBtn) {
+        tabVideoBtn.classList.add("active");
+        tab3dBtn.classList.remove("active");
+        tabVideoContent.style.display = "block";
+        tab3dContent.style.display = "none";
+    }
+    
     appendTerminalLog("[SYSTEM] Initializing 3D Generative Pipeline...\n");
     
     // Reset steps UI
@@ -363,10 +399,84 @@ function updateStatusBanner(stage) {
 function showFinalOutputs(videoUrl, plyUrl) {
     outputVideo.src = videoUrl;
     downloadPlyBtn.href = plyUrl;
+    currentPlyUrl = plyUrl;
     outputCard.style.display = "block";
     
     // Scroll output card into view
     outputCard.scrollIntoView({ behavior: "smooth" });
+}
+
+// ---------------------------------------------------------------------------
+// 4. Interactive 3D Gaussian Splatting Viewer
+// ---------------------------------------------------------------------------
+if (tabVideoBtn && tab3dBtn) {
+    tabVideoBtn.addEventListener("click", () => {
+        tabVideoBtn.classList.add("active");
+        tab3dBtn.classList.remove("active");
+        tabVideoContent.style.display = "block";
+        tab3dContent.style.display = "none";
+    });
+
+    tab3dBtn.addEventListener("click", () => {
+        tabVideoBtn.classList.remove("active");
+        tab3dBtn.classList.add("active");
+        tabVideoContent.style.display = "none";
+        tab3dContent.style.display = "block";
+        initSplatViewer(currentPlyUrl);
+    });
+}
+
+function initSplatViewer(plyUrl) {
+    if (!plyUrl) return;
+    
+    // If already loaded this specific PLY, do nothing
+    if (splatViewer && splatViewer.loadedUrl === plyUrl) {
+        return;
+    }
+    
+    // Clean up old canvas
+    if (splatViewerContainer) {
+        const canvases = splatViewerContainer.querySelectorAll("canvas");
+        canvases.forEach(c => c.remove());
+    }
+    
+    if (splatLoading) {
+        splatLoading.classList.remove("hidden");
+        const loadingText = splatLoading.querySelector("p");
+        if (loadingText) loadingText.innerText = "Loading 3D Gaussian Splats...";
+    }
+    
+    try {
+        if (splatViewer) {
+            splatViewer.dispose();
+        }
+    } catch(e) {
+        console.error(e);
+    }
+    
+    // Create new viewer
+    splatViewer = new GaussianSplats3D.Viewer({
+        'sharedMemoryForWorkers': false,
+        'selfRenderMode': true,
+        'rootElement': splatViewerContainer,
+        'useBuiltInControls': true,
+        'cameraUp': [0, 1, 0]
+    });
+    
+    splatViewer.loadedUrl = plyUrl;
+    
+    splatViewer.addSplatScene(plyUrl, {
+        'splatAlphaRemovalThreshold': 5,
+        'showLoadingUI': false
+    }).then(() => {
+        if (splatLoading) splatLoading.classList.add("hidden");
+    }).catch(err => {
+        console.error("Failed to load splat scene:", err);
+        if (splatLoading) {
+            const loadingText = splatLoading.querySelector("p");
+            if (loadingText) loadingText.innerText = "Error loading 3D environment.";
+        }
+    });
 }
 
 // Clear Terminal logs action

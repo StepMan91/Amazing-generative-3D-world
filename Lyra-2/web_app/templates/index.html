@@ -10,6 +10,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Chart.js for real-time resource plotting -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Three.js and Gaussian Splats 3D Import Map -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "gaussian-splats-3d": "https://unpkg.com/@mkkellogg/gaussian-splats-3d@0.4.0/build/gaussian-splats-3d.module.js"
+        }
+      }
+    </script>
     <!-- CSS stylesheet -->
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -151,16 +160,36 @@
 
                 <!-- Outputs Panel -->
                 <div class="glass-card output-card" id="output-card" style="display: none;">
-                    <h2>3D Generation Complete</h2>
-                    <p class="card-subtitle">View and download the reconstructed 3D world</p>
+                    <div class="output-header-tabs">
+                        <h2>3D Generation Complete</h2>
+                        <div class="tabs-container">
+                            <button class="tab-btn active" id="tab-video-btn">Flythrough Video</button>
+                            <button class="tab-btn" id="tab-3d-btn">Interactive 3D Viewer</button>
+                        </div>
+                    </div>
+                    <p class="card-subtitle" id="output-subtitle">View and download the reconstructed 3D world</p>
                     
-                    <div class="output-player-container">
-                        <video id="output-video" controls autoplay loop muted>
-                            <source src="" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
+                    <!-- Tab Content: Video -->
+                    <div class="tab-content" id="tab-video-content">
+                        <div class="output-player-container">
+                            <video id="output-video" controls autoplay loop muted>
+                                <source src="" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
                     </div>
 
+                    <!-- Tab Content: 3D Splat Viewer -->
+                    <div class="tab-content" id="tab-3d-content" style="display: none;">
+                        <div id="splat-viewer-container" class="splat-viewer-panel">
+                            <div id="splat-loading" class="splat-loading-overlay">
+                                <span class="spinner"></span>
+                                <p style="font-weight: 500; font-family: var(--font-outfit);">Loading 3D Gaussian Splats...</p>
+                                <p style="font-size: 12px; color: var(--text-secondary);">Controls: Left-Click to Orbit | Right-Click to Pan | WASD to Fly</p>
+                            </div>
+                        </div>
+                    </div>
+ 
                     <div class="output-actions">
                         <a href="" id="download-ply-btn" class="btn btn-secondary" download>
                             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -187,7 +216,8 @@
         </main>
     </div>
 
-    <!-- main JS -->
-    <script src="/static/js/main.js"></script>
+    <!-- main JS as Module -->
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
+
