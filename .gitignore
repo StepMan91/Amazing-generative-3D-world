@@ -19,3 +19,4 @@ Lyra-2/outputs/web_uploads/*
 Lyra-2/outputs/zoomgs/videos/*
 .cache/
 .ipynb_checkpoints/
+*.log
