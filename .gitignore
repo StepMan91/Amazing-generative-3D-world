@@ -1,0 +1,21 @@
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore build and distribution directories
+build/
+dist/
+*.egg-info/
+
+# Ignore compiled CUDA/C extensions
+fused-ssim/build/
+fused-ssim/dist/
+fused-ssim/fused_ssim.egg-info/
+
+# Ignore local outputs or caches
+Lyra-2/outputs/web_uploads/*
+Lyra-2/outputs/zoomgs/videos/*
+.cache/
+.ipynb_checkpoints/

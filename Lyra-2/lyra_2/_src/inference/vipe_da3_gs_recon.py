@@ -250,12 +250,20 @@ def _intrinsics_vec_to_k33(intrinsics_vec: torch.Tensor) -> torch.Tensor:
 
 
 def _probe_video(video_path: str) -> Tuple[int, float]:
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Failed to open video: {video_path}")
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
-    cap.release()
+    try:
+        import decord
+        vr = decord.VideoReader(video_path)
+        frame_count = len(vr)
+        fps = float(vr.get_avg_fps())
+    except Exception as e:
+        print(f"[vipe_da3_gs] Warning: decord failed to probe video: {e}. Falling back to cv2.")
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise FileNotFoundError(f"Failed to open video: {video_path}")
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        cap.release()
+
     if frame_count <= 0:
         frame_count = 0
     if fps <= 1e-6:
@@ -285,40 +293,47 @@ def _read_video_frames_rgb(video_path: str, indices: List[int]) -> List[np.ndarr
     if not indices:
         return []
 
-    wanted = set(int(i) for i in indices)
-    last_needed = int(max(wanted))
-    frames: List[np.ndarray] = []
-    read_ids: List[int] = []
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Failed to open video: {video_path}")
-
-    frame_idx = 0
     try:
-        while True:
-            ok, frame_bgr = cap.read()
-            if not ok or frame_bgr is None:
-                break
-            if frame_idx in wanted:
-                frames.append(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
-                read_ids.append(frame_idx)
-                if len(frames) == len(wanted):
+        import decord
+        vr = decord.VideoReader(video_path)
+        frames_nd = vr.get_batch(indices)
+        return [f for f in frames_nd.asnumpy()]
+    except Exception as e:
+        print(f"[vipe_da3_gs] Warning: decord failed to read frames: {e}. Falling back to cv2.")
+        wanted = set(int(i) for i in indices)
+        last_needed = int(max(wanted))
+        frames: List[np.ndarray] = []
+        read_ids: List[int] = []
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise FileNotFoundError(f"Failed to open video: {video_path}")
+
+        frame_idx = 0
+        try:
+            while True:
+                ok, frame_bgr = cap.read()
+                if not ok or frame_bgr is None:
                     break
-            if frame_idx >= last_needed:
-                break
-            frame_idx += 1
-    finally:
-        cap.release()
+                if frame_idx in wanted:
+                    frames.append(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+                    read_ids.append(frame_idx)
+                    if len(frames) == len(wanted):
+                        break
+                if frame_idx >= last_needed:
+                    break
+                frame_idx += 1
+        finally:
+            cap.release()
 
-    if len(frames) != len(wanted):
-        missing = sorted(list(wanted - set(read_ids)))
-        print(
-            f"[vipe_da3_gs] Warning: requested {len(wanted)} frames, got {len(frames)}. "
-            f"Missing={missing[:10]}"
-        )
+        if len(frames) != len(wanted):
+            missing = sorted(list(wanted - set(read_ids)))
+            print(
+                f"[vipe_da3_gs] Warning: requested {len(wanted)} frames, got {len(frames)}. "
+                f"Missing={missing[:10]}"
+            )
 
-    return frames
+        return frames
 
 
 def _compute_aligned_pred_w2c(pred_extr_np: np.ndarray, input_w2c_np: np.ndarray) -> np.ndarray:
@@ -494,25 +509,36 @@ def _collect_vipe_images(
         images_vipe = _read_video_frames_rgb(video_path, indices_vipe)
         return images_vipe, indices_vipe, fps
 
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Failed to open video: {video_path}")
-
-    frames_tmp: List[np.ndarray] = []
     try:
-        while True:
-            ok, frame_bgr = cap.read()
-            if not ok or frame_bgr is None:
-                break
-            frames_tmp.append(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
-            if max_frames > 0 and len(frames_tmp) >= max_frames:
-                break
-    finally:
-        cap.release()
+        import decord
+        vr = decord.VideoReader(video_path)
+        total = len(vr)
+        if max_frames > 0:
+            total = min(total, max_frames)
+        indices_vipe = _sample_indices(total, vipe_stride, max_views)
+        images_vipe = [f for f in vr.get_batch(indices_vipe).asnumpy()]
+        return images_vipe, indices_vipe, fps
+    except Exception as e:
+        print(f"[vipe_da3_gs] Warning: decord failed in collect: {e}. Falling back to cv2.")
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise FileNotFoundError(f"Failed to open video: {video_path}")
 
-    indices_vipe = _sample_indices(len(frames_tmp), vipe_stride, max_views)
-    images_vipe = [frames_tmp[idx] for idx in indices_vipe]
-    return images_vipe, indices_vipe, fps
+        frames_tmp: List[np.ndarray] = []
+        try:
+            while True:
+                ok, frame_bgr = cap.read()
+                if not ok or frame_bgr is None:
+                    break
+                frames_tmp.append(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+                if max_frames > 0 and len(frames_tmp) >= max_frames:
+                    break
+        finally:
+            cap.release()
+
+        indices_vipe = _sample_indices(len(frames_tmp), vipe_stride, max_views)
+        images_vipe = [frames_tmp[idx] for idx in indices_vipe]
+        return images_vipe, indices_vipe, fps
 
 
 def _build_output_dir(input_video_path: str, output_dir: str | None) -> Path:

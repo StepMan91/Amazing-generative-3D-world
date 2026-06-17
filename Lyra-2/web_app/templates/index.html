@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lyra 2.0 Generative 3D World Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Chart.js for real-time resource plotting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- CSS stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header class="app-header glass-panel">
+            <div class="header-logo">
+                <h1>Lyra 2.0</h1>
+                <span class="badge">NVIDIA Generative 3D</span>
+            </div>
+            <div class="header-status">
+                <span class="status-dot green" id="status-dot"></span>
+                <span id="status-text">System Ready</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace-grid">
+            
+            <!-- Left Column: Input and Execution Control -->
+            <section class="control-column">
+                
+                <!-- Upload Panel -->
+                <div class="glass-card" id="upload-card">
+                    <h2>1. Target Image</h2>
+                    <p class="card-subtitle">Upload a photo to generate a 3D environment</p>
+                    
+                    <div class="drop-zone" id="drop-zone">
+                        <div class="drop-zone-content">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                            </svg>
+                            <p class="drop-prompt">Drag & Drop image here or <span>Browse</span></p>
+                            <p class="drop-limit">Supports PNG, JPG, JPEG (Max 10MB)</p>
+                        </div>
+                        <input type="file" id="file-input" accept="image/*" style="display: none;">
+                        <img id="image-preview" src="" alt="Preview" style="display: none;">
+                    </div>
+                </div>
+
+                <!-- Prompt Config Panel -->
+                <div class="glass-card">
+                    <h2>2. Scene Prompt</h2>
+                    <p class="card-subtitle">Provide a text prompt describing the camera motion and style</p>
+                    
+                    <div class="input-group">
+                        <textarea id="prompt-input" rows="3" placeholder="A cinematic shot glides forward towards a beautiful two-story suburban house with a green lawn."></textarea>
+                    </div>
+
+                    <button class="btn btn-primary" id="generate-btn" disabled>
+                        <span>Generate 3D Environment</span>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Pipeline Progression Panel -->
+                <div class="glass-card progression-card">
+                    <h2>Pipeline Status</h2>
+                    <p class="card-subtitle">Live pipeline step tracking</p>
+                    
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+                        <span class="progress-percentage" id="progress-pct">0%</span>
+                    </div>
+
+                    <ul class="step-list">
+                        <li id="step-upload" class="step-item pending">
+                            <span class="step-circle">✓</span>
+                            <span class="step-name">Image Upload & Prep</span>
+                        </li>
+                        <li id="step-video" class="step-item pending">
+                            <span class="step-circle">1</span>
+                            <span class="step-name">Video Exploration Generation (DMD)</span>
+                        </li>
+                        <li id="step-recon" class="step-item pending">
+                            <span class="step-circle">2</span>
+                            <span class="step-name">3D Gaussian Splatting Reconstruction</span>
+                        </li>
+                    </ul>
+                </div>
+
+            </section>
+
+            <!-- Right Column: Resource Monitoring & Outputs -->
+            <section class="monitor-column">
+                
+                <!-- Resource stats -->
+                <div class="glass-card resources-card">
+                    <h2>DGX Spark Resources</h2>
+                    <p class="card-subtitle">Real-time CPU and Blackwell GPU resource usage</p>
+                    
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h3>Blackwell GPU</h3>
+                                <span class="metric-val" id="gpu-util-val">0%</span>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="gpuChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h3>VRAM Memory</h3>
+                                <span class="metric-val" id="gpu-mem-val">0 MB</span>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="vramChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h3>Grace CPU</h3>
+                                <span class="metric-val" id="cpu-util-val">0%</span>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="cpuChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h3>System RAM</h3>
+                                <span class="metric-val" id="ram-util-val">0%</span>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="ramChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Outputs Panel -->
+                <div class="glass-card output-card" id="output-card" style="display: none;">
+                    <h2>3D Generation Complete</h2>
+                    <p class="card-subtitle">View and download the reconstructed 3D world</p>
+                    
+                    <div class="output-player-container">
+                        <video id="output-video" controls autoplay loop muted>
+                            <source src="" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+
+                    <div class="output-actions">
+                        <a href="" id="download-ply-btn" class="btn btn-secondary" download>
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                            <span>Download 3D Gaussians (PLY)</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Log Console Panel -->
+                <div class="glass-card log-card">
+                    <div class="log-card-header">
+                        <h2>Live Execution Logs</h2>
+                        <button class="btn-text" id="clear-logs-btn">Clear</button>
+                    </div>
+                    <div class="terminal-window" id="log-terminal">
+                        <div class="terminal-line system-line">[SYSTEM] Terminal initialized. Waiting for prompt...</div>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- main JS -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

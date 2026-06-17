@@ -78,6 +78,12 @@ def register_lyra2():
         name="lyra2",
         node=experiment_config,
     )
+    cs.store(
+        group="experiment",
+        package="_global_",
+        name="lyra_framepack_spatial",
+        node=experiment_config,
+    )
 
 
 register_lyra2()

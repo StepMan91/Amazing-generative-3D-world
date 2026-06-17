@@ -34,6 +34,23 @@ from typing import List, Tuple
 import cv2
 import numpy as np
 import torch
+# Monkeypatch erfinv to avoid NVRTC architecture mismatch on sm_121 / Blackwell
+original_erfinv_ = torch.Tensor.erfinv_
+def patched_erfinv_(self):
+    if self.is_cuda:
+        cpu_tensor = self.cpu().erfinv_()
+        self.copy_(cpu_tensor)
+        return self
+    return original_erfinv_(self)
+torch.Tensor.erfinv_ = patched_erfinv_
+
+original_erfinv = torch.erfinv
+def patched_erfinv(input, *args, **kwargs):
+    if isinstance(input, torch.Tensor) and input.is_cuda:
+        return original_erfinv(input.cpu(), *args, **kwargs).to(input.device)
+    return original_erfinv(input, *args, **kwargs)
+torch.erfinv = patched_erfinv
+
 import torch.nn.functional as F
 
 from lyra_2._ext.imaginaire.utils import log, misc
