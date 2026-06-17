@@ -42,6 +42,7 @@ const splatLoading = document.getElementById("splat-loading");
 // Resource Card Value Labels
 const gpuUtilVal = document.getElementById("gpu-util-val");
 const gpuMemVal = document.getElementById("gpu-mem-val");
+const gpuTempVal = document.getElementById("gpu-temp-val");
 const cpuUtilVal = document.getElementById("cpu-util-val");
 const ramUtilVal = document.getElementById("ram-util-val");
 
@@ -92,6 +93,7 @@ function createResourceChart(canvasId, label, color) {
 
 // Initialize charts
 charts.gpu = createResourceChart("gpuChart", "GPU Util", "#6366f1");
+charts.temp = createResourceChart("gpuTempChart", "GPU Temp", "#f97316");
 charts.vram = createResourceChart("vramChart", "VRAM Util", "#a855f7");
 charts.cpu = createResourceChart("cpuChart", "CPU Util", "#3b82f6");
 charts.ram = createResourceChart("ramChart", "RAM Util", "#06b6d4");
@@ -121,13 +123,16 @@ function connectMetricsStream() {
         // Update Labels
         gpuUtilVal.innerText = `${data.gpu_util}%`;
         gpuMemVal.innerText = `${data.gpu_mem} MB`;
+        if (gpuTempVal) gpuTempVal.innerText = `${data.gpu_temp}°C`;
         cpuUtilVal.innerText = `${data.cpu_util}%`;
         ramUtilVal.innerText = `${data.ram_util}%`;
         
         // Update Charts
         updateChartData(charts.gpu, data.gpu_util);
+        if (charts.temp) updateChartData(charts.temp, data.gpu_temp);
         updateChartData(charts.cpu, data.cpu_util);
         updateChartData(charts.ram, data.ram_util);
+
         
         // Compute rough VRAM utilization percentage for plotting (128GB total memory or Blackwell capacity)
         // Blackwell GB10 has 24GB or 32GB VRAM. Let's assume max scale in chart is 32000 MB.

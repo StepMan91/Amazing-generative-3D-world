@@ -287,9 +287,14 @@ async def metrics_stream():
         while True:
             # Query GPU Util
             gpu_util = 0
+            gpu_temp = 0
             if NVML_AVAILABLE:
                 try:
                     gpu_util = pynvml.nvmlDeviceGetUtilizationRates(nvml_handle).gpu
+                except:
+                    pass
+                try:
+                    gpu_temp = pynvml.nvmlDeviceGetTemperature(nvml_handle, pynvml.NVML_TEMPERATURE_GPU)
                 except:
                     pass
                     
@@ -304,6 +309,7 @@ async def metrics_stream():
             data = {
                 "gpu_util": gpu_util,
                 "gpu_mem": gpu_mem,
+                "gpu_temp": gpu_temp,
                 "cpu_util": cpu_util,
                 "ram_util": ram_util
             }
