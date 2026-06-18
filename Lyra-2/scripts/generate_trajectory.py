@@ -46,12 +46,13 @@ def create_camera_matrix(pos, yaw, pitch, roll):
     c2w[:3, 3] = pos
     return c2w
 
-def generate_haunted_house_trajectory(num_frames=241):
+def generate_haunted_house_trajectory(num_frames=481):
     """
     Generates a path that:
-    1. Moves forward into the house (frames 0 to 80)
-    2. Enters and pans right towards the living room (frames 80 to 160)
-    3. Moves forward into the room and climbs slightly (frames 160 to 241)
+    1. Moves forward into the house (frames 0 to 120)
+    2. Enters and pans right towards the living room (frames 120 to 240)
+    3. Performs a slow panoramic look-around to cover the corners (frames 240 to 360)
+    4. Turns towards the stairs, advances and climbs them (frames 360 to 481)
     """
     w2c_matrices = []
     
@@ -74,26 +75,45 @@ def generate_haunted_house_trajectory(num_frames=241):
         pitch = 0.0
         roll = 0.0
         
-        if i <= 80:
+        if i <= 120:
             # Stage 1: Move forward into the porch (Z goes from 0 to -0.6)
-            progress = i / 80.0
+            progress = i / 120.0
             pos[2] = -0.6 * progress
             
-        elif i <= 160:
+        elif i <= 240:
             # Stage 2: Enter door and turn right (Yaw goes from 0 to 45 degrees, X shifts right)
-            progress = (i - 80) / 80.0
-            pos[2] = -0.6 - (0.4 * progress)       # keep moving forward (Z -> -1.0)
-            pos[0] = 0.3 * progress                # slide slightly right (X -> 0.3)
+            progress = (i - 120) / 120.0
+            pos[2] = -0.6 - (0.6 * progress)       # keep moving forward (Z -> -1.2)
+            pos[0] = 0.4 * progress                # slide slightly right (X -> 0.4)
             yaw = 45.0 * progress                  # turn 45 degrees right
             
-        else:
-            # Stage 3: Walk deeper into the room (X -> 0.6, Z -> -1.5) and tilt head up (Pitch)
-            progress = (i - 160) / (num_frames - 160)
-            pos[0] = 0.3 + (0.3 * progress)
-            pos[2] = -1.0 - (0.5 * progress)
+        elif i <= 360:
+            # Stage 3: Inside the room, panoramic look around
+            progress = (i - 240) / 120.0
+            pos[0] = 0.4 + (0.2 * progress)        # keep drifting right
+            pos[2] = -1.2 - (0.3 * progress)        # keep drifting deep
             pos[1] = 0.1 * progress                # move slightly up
-            yaw = 45.0 + (5.0 * progress)          # adjust turn slightly
-            pitch = -5.0 * progress                # tilt head up slightly (negative pitch)
+            
+            # Yaw sweeps left then right to see all corners
+            if progress <= 0.5:
+                sub_p = progress / 0.5
+                yaw = 45.0 - (75.0 * sub_p)        # pan left (45 -> -30)
+                pitch = -10.0 * sub_p              # look up slightly
+            else:
+                sub_p = (progress - 0.5) / 0.5
+                yaw = -30.0 + (90.0 * sub_p)       # pan right (-30 -> 60)
+                pitch = -10.0 + (15.0 * sub_p)     # look down slightly (to 5)
+                
+        else:
+            # Stage 4: Turn towards stairs, advance and climb (Yaw -> 45, X -> 1.0, Z -> -2.0, Y -> 0.5)
+            progress = (i - 360) / (num_frames - 360)
+            pos[0] = 0.6 + (0.4 * progress)
+            pos[2] = -1.5 - (0.5 * progress)
+            pos[1] = 0.1 + (0.4 * progress)
+            
+            # Return yaw to 45 and pitch to -5
+            yaw = 60.0 - (15.0 * progress)
+            pitch = 5.0 - (10.0 * progress)
 
         # Convert c2w to w2c (World-to-Camera)
         c2w = create_camera_matrix(pos, yaw, pitch, roll)
@@ -112,7 +132,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     
     # Generate matrices
-    num_frames = 241
+    num_frames = 481
     w2c, intrinsics = generate_haunted_house_trajectory(num_frames)
     
     # Save .npz file
@@ -132,8 +152,9 @@ def main():
     # Save a template captions.json
     captions = {
         "0": "A camera slowly glides forward approaching the dilapidated front porch of the abandoned wooden house.",
-        "81": "We pass through the broken doorway into the dark entrance hall, panning slowly to the right.",
-        "161": "Inside the dusty room, we pan towards the ruined living room and kitchen filled with cobwebs and decaying furniture."
+        "121": "We pass through the broken doorway into the dark entrance hall, panning slowly to the right.",
+        "241": "Inside the dusty room, we pan towards the ruined living room and kitchen filled with cobwebs and decaying furniture.",
+        "361": "We turn towards a creaky, broken wooden staircase on the right, slowly climbing the steps into the upper level."
     }
     
     json_path = os.path.join(output_dir, "captions.json")
@@ -145,7 +166,7 @@ def main():
     print("  --input_image_path /workspace/lyra/Lyra-2/assets/samples/your_house_image.png \\")
     print("  --trajectory_path /workspace/lyra/Lyra-2/assets/custom_trajectory_examples/haunted_house/trajectory.npz \\")
     print("  --captions_path /workspace/lyra/Lyra-2/assets/custom_trajectory_examples/haunted_house/captions.json \\")
-    print("  --num_frames 241 \\")
+    print("  --num_frames 481 \\")
     print("  --output_path /workspace/lyra/outputs/custom_traj")
 
 if __name__ == "__main__":
