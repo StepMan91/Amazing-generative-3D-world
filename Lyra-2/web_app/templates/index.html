@@ -125,6 +125,13 @@
                             <path d="M5 12h14M12 5l7 7-7 7"/>
                         </svg>
                     </button>
+                    <!-- Stop Button -->
+                    <button class="btn" id="stop-btn" style="display: none; background: var(--error); box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.4); margin-top: 10px;">
+                        <span>Cancel Generation</span>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                        </svg>
+                    </button>
                 </div>
 
 
@@ -241,6 +248,28 @@
 
                     <!-- Tab Content: 3D Splat Viewer -->
                     <div class="tab-content" id="tab-3d-content" style="display: none;">
+                        <!-- 3D Controls panel -->
+                        <div class="splat-controls-bar glass-panel" style="margin-bottom: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.2);">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
+                                <label for="ply-history-select" style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; margin-bottom: 0;">Reconstructed PLY:</label>
+                                <select id="ply-history-select" style="background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); color: #fff; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; outline: none; flex-grow: 1; max-width: 300px;">
+                                    <option value="">-- Select from History --</option>
+                                </select>
+                                <button class="btn btn-secondary" id="refresh-ply-btn" style="padding: 6px 10px; font-size: 12px; width: auto; font-family: var(--font-inter); margin: 0;">
+                                    Refresh
+                                </button>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="btn btn-secondary" id="upload-ply-trigger" style="padding: 6px 14px; font-size: 12px; width: auto; font-family: var(--font-inter); display: flex; align-items: center; gap: 6px; margin: 0;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                                    </svg>
+                                    <span>Upload Local PLY</span>
+                                </button>
+                                <input type="file" id="local-ply-input" accept=".ply" style="display: none;">
+                            </div>
+                        </div>
+
                         <div id="splat-viewer-container" class="splat-viewer-panel">
                             <div id="splat-loading" class="splat-loading-overlay">
                                 <span class="spinner"></span>

@@ -31,6 +31,8 @@ app.mount("/outputs", StaticFiles(directory=str(WORKSPACE_ROOT / "outputs")), na
 log_history = []
 current_status = {"stage": "idle", "percent": 0}
 pipeline_lock = threading.Lock()
+current_process = None
+pipeline_cancelled = False
 
 # Initialize pynvml
 try:
@@ -90,7 +92,8 @@ def add_log(text: str):
     sys.stdout.flush()
 
 def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd: bool, num_frames: int, guidance: float, pose_scale: float):
-    global current_status, log_history
+    global current_status, log_history, current_process, pipeline_cancelled
+    pipeline_cancelled = False
     
     stem = Path(img_filename).stem
     img_path = str(UPLOAD_DIR / img_filename)
@@ -176,6 +179,7 @@ def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd
             cwd=str(WORKSPACE_ROOT),
             env=env
         )
+        current_process = proc1
         
         while True:
             line = proc1.stdout.readline()
@@ -191,6 +195,7 @@ def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd
                 current_status["percent"] = 35
                 
         proc1.wait()
+        current_process = None
         if proc1.returncode != 0:
             raise RuntimeError(f"Video generation script exited with code {proc1.returncode}")
             
@@ -221,6 +226,7 @@ def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd
             cwd=str(WORKSPACE_ROOT),
             env=env
         )
+        current_process = proc2
         
         while True:
             line = proc2.stdout.readline()
@@ -238,6 +244,7 @@ def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd
                 current_status["percent"] = 92
                 
         proc2.wait()
+        current_process = None
         if proc2.returncode != 0:
             raise RuntimeError(f"GS Reconstruction script exited with code {proc2.returncode}")
             
@@ -250,8 +257,13 @@ def run_pipeline_thread(img_filename: str, prompt: str, trajectory: str, use_dmd
         }
         
     except Exception as e:
-        add_log(f"[SYSTEM] ERROR: Pipeline execution failed: {str(e)}\n")
-        current_status = {"stage": "failed", "percent": 100, "error": str(e)}
+        current_process = None
+        if pipeline_cancelled:
+            add_log("[SYSTEM] Generation pipeline cancelled by user.\n")
+            current_status = {"stage": "failed", "percent": 100, "error": "Pipeline cancelled by user"}
+        else:
+            add_log(f"[SYSTEM] ERROR: Pipeline execution failed: {str(e)}\n")
+            current_status = {"stage": "failed", "percent": 100, "error": str(e)}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -325,6 +337,60 @@ async def start_pipeline(
     ).start()
     
     return {"status": "started"}
+
+
+@app.post("/api/stop")
+async def stop_pipeline():
+    global current_process, pipeline_cancelled
+    if current_process is not None:
+        try:
+            pipeline_cancelled = True
+            current_process.terminate()
+            try:
+                current_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                current_process.kill()
+            return {"status": "stopping"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to terminate process: {e}")
+    return {"status": "idle"}
+
+
+@app.get("/api/ply_files")
+async def list_ply_files():
+    ply_list = []
+    
+    # Scan zoomgs outputs
+    zoomgs_dir = WORKSPACE_ROOT / "outputs" / "zoomgs"
+    if zoomgs_dir.exists():
+        for root, dirs, files in os.walk(str(zoomgs_dir)):
+            for f in files:
+                if f.endswith(".ply"):
+                    full_path = Path(root) / f
+                    try:
+                        rel_path = full_path.relative_to(WORKSPACE_ROOT)
+                        url = f"/outputs/{rel_path}"
+                        label = f"Preset: {full_path.parent.name.replace('_gs_ours', '')}"
+                        ply_list.append({"label": label, "url": url})
+                    except Exception:
+                        pass
+
+    # Scan custom_traj outputs
+    custom_traj_dir = WORKSPACE_ROOT / "outputs" / "custom_traj"
+    if custom_traj_dir.exists():
+        for root, dirs, files in os.walk(str(custom_traj_dir)):
+            for f in files:
+                if f.endswith(".ply"):
+                    full_path = Path(root) / f
+                    try:
+                        rel_path = full_path.relative_to(WORKSPACE_ROOT)
+                        url = f"/outputs/{rel_path}"
+                        label = f"Custom: {full_path.parent.name.replace('_gs_ours', '')}"
+                        ply_list.append({"label": label, "url": url})
+                    except Exception:
+                        pass
+                        
+    return sorted(ply_list, key=lambda x: x["label"])
 
 
 @app.get("/api/progress")

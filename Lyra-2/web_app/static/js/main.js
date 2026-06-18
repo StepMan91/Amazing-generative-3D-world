@@ -13,6 +13,11 @@ const fileInput = document.getElementById("file-input");
 const imagePreview = document.getElementById("image-preview");
 const dropZoneContent = document.querySelector(".drop-zone-content");
 const generateBtn = document.getElementById("generate-btn");
+const stopBtn = document.getElementById("stop-btn");
+const plyHistorySelect = document.getElementById("ply-history-select");
+const refreshPlyBtn = document.getElementById("refresh-ply-btn");
+const uploadPlyTrigger = document.getElementById("upload-ply-trigger");
+const localPlyInput = document.getElementById("local-ply-input");
 const promptInput = document.getElementById("prompt-input");
 const progressBar = document.getElementById("progress-bar");
 const progressPct = document.getElementById("progress-pct");
@@ -368,7 +373,12 @@ function connectProgressStream() {
 
 // Helper: Enable Inputs after run
 function enableAllInputs() {
+    generateBtn.style.display = "flex";
     generateBtn.removeAttribute("disabled");
+    if (stopBtn) {
+        stopBtn.style.display = "none";
+        stopBtn.removeAttribute("disabled");
+    }
     promptInput.removeAttribute("disabled");
     fileInput.removeAttribute("disabled");
     if (trajectorySelect) trajectorySelect.removeAttribute("disabled");
@@ -379,7 +389,11 @@ function enableAllInputs() {
 }
 
 function disableAllInputs() {
-    generateBtn.setAttribute("disabled", "true");
+    generateBtn.style.display = "none";
+    if (stopBtn) {
+        stopBtn.style.display = "flex";
+        stopBtn.removeAttribute("disabled");
+    }
     promptInput.setAttribute("disabled", "true");
     fileInput.setAttribute("disabled", "true");
     if (trajectorySelect) trajectorySelect.setAttribute("disabled", "true");
@@ -440,6 +454,13 @@ function showFinalOutputs(videoUrl, plyUrl) {
     downloadPlyBtn.href = plyUrl;
     currentPlyUrl = plyUrl;
     outputCard.style.display = "block";
+    
+    // Refresh history list so newly generated file is selected
+    loadPlyHistory().then(() => {
+        if (plyHistorySelect) {
+            plyHistorySelect.value = plyUrl;
+        }
+    });
     
     // Scroll output card into view
     outputCard.scrollIntoView({ behavior: "smooth" });
@@ -552,7 +573,89 @@ clearLogsBtn.addEventListener("click", () => {
     logTerminal.innerHTML = "";
 });
 
+// Stop pipeline action
+if (stopBtn) {
+    stopBtn.addEventListener("click", async () => {
+        appendTerminalLog("[SYSTEM] Requesting cancellation of the generation pipeline...");
+        stopBtn.setAttribute("disabled", "true");
+        try {
+            const res = await fetch("/api/stop", { method: "POST" });
+            if (res.ok) {
+                appendTerminalLog("[SYSTEM] Cancel request sent to server.");
+            } else {
+                throw new Error(await res.text());
+            }
+        } catch (err) {
+            appendTerminalLog(`[SYSTEM] ERROR: Failed to send cancel request: ${err.message}`);
+            stopBtn.removeAttribute("disabled");
+        }
+    });
+}
+
+// Load PLY history function
+async function loadPlyHistory() {
+    try {
+        const res = await fetch("/api/ply_files");
+        if (res.ok) {
+            const list = await res.json();
+            const currentVal = plyHistorySelect ? plyHistorySelect.value : "";
+            if (plyHistorySelect) {
+                plyHistorySelect.innerHTML = '<option value="">-- Select from History --</option>';
+                list.forEach(item => {
+                    const opt = document.createElement("option");
+                    opt.value = item.url;
+                    opt.innerText = item.label;
+                    plyHistorySelect.appendChild(opt);
+                });
+                if (currentVal) {
+                    plyHistorySelect.value = currentVal;
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Failed to load PLY history:", err);
+    }
+}
+
+// Local PLY file trigger
+if (uploadPlyTrigger && localPlyInput) {
+    uploadPlyTrigger.addEventListener("click", () => localPlyInput.click());
+    
+    localPlyInput.addEventListener("change", (e) => {
+        if (localPlyInput.files.length) {
+            const file = localPlyInput.files[0];
+            if (!file.name.endsWith(".ply")) {
+                alert("Please select a valid .ply Gaussian Splatting file.");
+                return;
+            }
+            const objectUrl = URL.createObjectURL(file);
+            appendTerminalLog(`[SYSTEM] Loading local PLY: ${file.name}...`);
+            initSplatViewer(objectUrl);
+            if (plyHistorySelect) plyHistorySelect.value = "";
+        }
+    });
+}
+
+// Select PLY from history
+if (plyHistorySelect) {
+    plyHistorySelect.addEventListener("change", () => {
+        const selectedUrl = plyHistorySelect.value;
+        if (selectedUrl) {
+            appendTerminalLog(`[SYSTEM] Loading PLY from history: ${selectedUrl}...`);
+            initSplatViewer(selectedUrl);
+        }
+    });
+}
+
+// Refresh PLY history
+if (refreshPlyBtn) {
+    refreshPlyBtn.addEventListener("click", () => {
+        loadPlyHistory();
+    });
+}
+
 // Initialize on page load
 connectMetricsStream();
 loadTrajectories();
+loadPlyHistory();
 
