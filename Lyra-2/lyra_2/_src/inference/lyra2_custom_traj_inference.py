@@ -57,6 +57,50 @@ torch.backends.cudnn.enabled = False
 # Trajectory loading
 # ---------------------------------------------------------------------------
 
+def interpolate_trajectory(w2c: torch.Tensor, intrinsics: torch.Tensor, target_len: int) -> tuple[torch.Tensor, torch.Tensor]:
+    orig_len = w2c.shape[0]
+    if orig_len == target_len or orig_len < 2:
+        return w2c, intrinsics
+    
+    device = w2c.device
+    xs = torch.linspace(0, orig_len - 1, steps=target_len, device=device)
+    
+    idx_low = torch.floor(xs).long()
+    idx_high = torch.ceil(xs).long()
+    
+    idx_low = torch.clamp(idx_low, 0, orig_len - 1)
+    idx_high = torch.clamp(idx_high, 0, orig_len - 1)
+    
+    weight = xs - idx_low.float()
+    weight_w2c = weight.view(-1, 1, 1)
+    weight_k = weight.view(-1, 1, 1)
+    
+    w2c_low = w2c[idx_low]
+    w2c_high = w2c[idx_high]
+    w2c_interp = (1.0 - weight_w2c) * w2c_low + weight_w2c * w2c_high
+    
+    R = w2c_interp[:, :3, :3]
+    v1 = R[:, :, 0]
+    v2 = R[:, :, 1]
+    v3 = R[:, :, 2]
+    
+    e1 = v1 / torch.linalg.norm(v1, dim=-1, keepdim=True).clamp(min=1e-8)
+    u2 = v2 - torch.sum(v2 * e1, dim=-1, keepdim=True) * e1
+    e2 = u2 / torch.linalg.norm(u2, dim=-1, keepdim=True).clamp(min=1e-8)
+    u3 = v3 - torch.sum(v3 * e1, dim=-1, keepdim=True) * e1 - torch.sum(v3 * e2, dim=-1, keepdim=True) * e2
+    e3 = u3 / torch.linalg.norm(u3, dim=-1, keepdim=True).clamp(min=1e-8)
+    
+    R_ortho = torch.stack([e1, e2, e3], dim=-1)
+    w2c_interp = w2c_interp.clone()
+    w2c_interp[:, :3, :3] = R_ortho
+    
+    k_low = intrinsics[idx_low]
+    k_high = intrinsics[idx_high]
+    k_interp = (1.0 - weight_k) * k_low + weight_k * k_high
+    
+    return w2c_interp, k_interp
+
+
 def load_trajectory(
     path: str,
     num_frames: int,
@@ -73,11 +117,26 @@ def load_trajectory(
     If *target_hw* is provided and differs from the stored resolution,
     intrinsics are rescaled accordingly.
 
-    Returns the first *num_frames* entries as torch tensors.
+    If the loaded trajectory length does not match *num_frames*, it is
+    dynamically interpolated to ensure smooth movement and avoid index errors.
+
+    Returns the trajectory tensors and the original length.
     """
     data = np.load(path)
-    w2c = torch.from_numpy(data["w2c"][:num_frames].astype(np.float32))
-    intrinsics = torch.from_numpy(data["intrinsics"][:num_frames].astype(np.float32))
+    raw_w2c = data["w2c"]
+    raw_intrinsics = data["intrinsics"]
+    orig_len = raw_w2c.shape[0]
+
+    w2c = torch.from_numpy(raw_w2c.astype(np.float32))
+    intrinsics = torch.from_numpy(raw_intrinsics.astype(np.float32))
+
+    if orig_len != num_frames:
+        log.info(
+            f"Trajectory original length {orig_len} differs from requested num_frames {num_frames}. "
+            "Dynamically interpolating trajectory...",
+            rank0_only=True,
+        )
+        w2c, intrinsics = interpolate_trajectory(w2c, intrinsics, num_frames)
 
     if pose_scale != 1.0:
         w2c[:, :3, 3] *= pose_scale
@@ -93,7 +152,7 @@ def load_trajectory(
             intrinsics[:, 1, 1] *= sy
             intrinsics[:, 1, 2] *= sy
 
-    return w2c, intrinsics
+    return w2c, intrinsics, orig_len
 
 
 # ---------------------------------------------------------------------------
@@ -327,8 +386,8 @@ if __name__ == "__main__":
             log.error(f"Trajectory file not found: {traj_file}")
             continue
 
-        w2cs_T_44, Ks_T_33 = load_trajectory(traj_file, N, target_hw=(target_h, target_w), pose_scale=args.pose_scale)
-        log.info(f"Loaded trajectory: {w2cs_T_44.shape[0]} frames from {traj_file}", rank0_only=True)
+        w2cs_T_44, Ks_T_33, orig_len = load_trajectory(traj_file, N, target_hw=(target_h, target_w), pose_scale=args.pose_scale)
+        log.info(f"Loaded trajectory: {w2cs_T_44.shape[0]} frames (original length: {orig_len}) from {traj_file}", rank0_only=True)
 
         # ---- Read image ----
         bgr = cv2.imread(img_path)
@@ -414,6 +473,21 @@ if __name__ == "__main__":
         if captions_file is not None:
             with open(captions_file, "r") as f:
                 captions_dict = json.load(f)
+            
+            # Scale keys if trajectory was interpolated
+            if orig_len != N and orig_len > 1:
+                scaled_captions_dict = {}
+                scale_factor = N / orig_len
+                for k, v in captions_dict.items():
+                    try:
+                        k_new = int(round(float(k) * scale_factor))
+                        k_new = max(0, min(k_new, N - 1))
+                        scaled_captions_dict[str(k_new)] = v
+                    except ValueError:
+                        scaled_captions_dict[k] = v
+                captions_dict = scaled_captions_dict
+                log.info(f"Scaled caption keys from original traj length {orig_len} to {N}: {captions_dict}", rank0_only=True)
+
             chunk_keys_int = sorted(int(k) for k in captions_dict)
             chunk_keys_int = [k for k in chunk_keys_int if k < N]
             if len(chunk_keys_int) > 1:
