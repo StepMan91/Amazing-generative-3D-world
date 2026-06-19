@@ -547,7 +547,7 @@ function initSplatViewer(plyUrl) {
     try {
         splatViewer = new GaussianSplats3D.Viewer({
             'sharedMemoryForWorkers': false,
-            'selfRenderMode': true,
+            'selfDrivenMode': true,
             'rootElement': splatViewerContainer,
             'useBuiltInControls': true,
             'cameraUp': [0, 1, 0]
@@ -556,9 +556,11 @@ function initSplatViewer(plyUrl) {
         splatViewer.loadedUrl = plyUrl;
         
         splatViewer.addSplatScene(plyUrl, {
+            'splatAlphaRemovalThreshold': 15,
             'showLoadingUI': false
         }).then(() => {
             if (splatLoading) splatLoading.classList.add("hidden");
+            splatViewer.start();
         }).catch(err => {
             console.error("Failed to load splat scene:", err);
             if (splatLoading) {
