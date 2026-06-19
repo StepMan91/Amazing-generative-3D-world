@@ -49,10 +49,11 @@ def create_camera_matrix(pos, yaw, pitch, roll):
 def generate_haunted_house_trajectory(num_frames=481):
     """
     Generates a path that:
-    1. Moves forward into the house (frames 0 to 120)
-    2. Enters and pans right towards the living room (frames 120 to 240)
-    3. Performs a slow panoramic look-around to cover the corners (frames 240 to 360)
-    4. Turns towards the stairs, advances and climbs them (frames 360 to 481)
+    1. Moves forward into the house (Phase 1: 0% to 20%)
+    2. Regard à droite (Phase 2: 20% to 40%)
+    3. Regard à gauche (Phase 3: 40% to 60%)
+    4. Revenir devant (Phase 4: 60% to 75%)
+    5. Entrer dans la maison et voir le salon/escalier (Phase 5: 75% to 100%)
     """
     w2c_matrices = []
     
@@ -65,55 +66,51 @@ def generate_haunted_house_trajectory(num_frames=481):
     
     intrinsics_list = []
 
+    # Frame boundaries
+    b1 = int(round(num_frames * 0.25))
+    b2 = int(round(num_frames * 0.45))
+    b3 = int(round(num_frames * 0.65))
+    b4 = int(round(num_frames * 0.80))
+
     # Camera positions and rotations in the world (c2w)
     for i in range(num_frames):
-        t = i / (num_frames - 1)
-        
         # Initialize defaults
         pos = np.array([0.0, 0.0, 0.0])
         yaw = 0.0
         pitch = 0.0
         roll = 0.0
         
-        if i <= 120:
-            # Stage 1: Move forward into the porch (Z goes from 0 to -0.6)
-            progress = i / 120.0
-            pos[2] = -0.6 * progress
+        if i <= b1:
+            # Phase 1: Avancer vers la maison (Z: 0.0 -> 1.5)
+            progress = i / b1 if b1 > 0 else 1.0
+            pos[2] = 1.5 * progress
             
-        elif i <= 240:
-            # Stage 2: Enter door and turn right (Yaw goes from 0 to 45 degrees, X shifts right)
-            progress = (i - 120) / 120.0
-            pos[2] = -0.6 - (0.6 * progress)       # keep moving forward (Z -> -1.2)
-            pos[0] = 0.4 * progress                # slide slightly right (X -> 0.4)
-            yaw = 45.0 * progress                  # turn 45 degrees right
+        elif i <= b2:
+            # Phase 2: Regarder à droite (Z: 1.5 -> 2.0, Yaw: 0.0 -> 35.0)
+            progress = (i - b1) / (b2 - b1) if (b2 - b1) > 0 else 1.0
+            pos[2] = 1.5 + 0.5 * progress
+            yaw = 35.0 * progress
             
-        elif i <= 360:
-            # Stage 3: Inside the room, panoramic look around
-            progress = (i - 240) / 120.0
-            pos[0] = 0.4 + (0.2 * progress)        # keep drifting right
-            pos[2] = -1.2 - (0.3 * progress)        # keep drifting deep
-            pos[1] = 0.1 * progress                # move slightly up
+        elif i <= b3:
+            # Phase 3: Regarder à gauche (Z: 2.0 -> 2.5, Yaw: 35.0 -> -35.0)
+            progress = (i - b2) / (b3 - b2) if (b3 - b2) > 0 else 1.0
+            pos[2] = 2.0 + 0.5 * progress
+            yaw = 35.0 - 70.0 * progress
             
-            # Yaw sweeps left then right to see all corners
-            if progress <= 0.5:
-                sub_p = progress / 0.5
-                yaw = 45.0 - (75.0 * sub_p)        # pan left (45 -> -30)
-                pitch = -10.0 * sub_p              # look up slightly
-            else:
-                sub_p = (progress - 0.5) / 0.5
-                yaw = -30.0 + (90.0 * sub_p)       # pan right (-30 -> 60)
-                pitch = -10.0 + (15.0 * sub_p)     # look down slightly (to 5)
-                
+        elif i <= b4:
+            # Phase 4: Revenir devant (Z: 2.5 -> 3.0, Yaw: -35.0 -> 0.0)
+            progress = (i - b3) / (b4 - b3) if (b4 - b3) > 0 else 1.0
+            pos[2] = 2.5 + 0.5 * progress
+            yaw = -35.0 + 35.0 * progress
+            
         else:
-            # Stage 4: Turn towards stairs, advance and climb (Yaw -> 45, X -> 1.0, Z -> -2.0, Y -> 0.5)
-            progress = (i - 360) / (num_frames - 360)
-            pos[0] = 0.6 + (0.4 * progress)
-            pos[2] = -1.5 - (0.5 * progress)
-            pos[1] = 0.1 + (0.4 * progress)
-            
-            # Return yaw to 45 and pitch to -5
-            yaw = 60.0 - (15.0 * progress)
-            pitch = 5.0 - (10.0 * progress)
+            # Phase 5: Entrer dans la maison (Z: 3.0 -> 5.5, X: 0.0 -> 0.4, Y: 0.0 -> 0.25, Yaw: 0.0 -> 25.0, Pitch: 0.0 -> -15.0)
+            progress = (i - b4) / (num_frames - 1 - b4) if (num_frames - 1 - b4) > 0 else 1.0
+            pos[2] = 3.0 + 2.5 * progress
+            pos[0] = 0.4 * progress
+            pos[1] = 0.25 * progress
+            yaw = 25.0 * progress
+            pitch = -15.0 * progress
 
         # Convert c2w to w2c (World-to-Camera)
         c2w = create_camera_matrix(pos, yaw, pitch, roll)
@@ -132,7 +129,8 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     
     # Generate matrices
-    num_frames = 481
+    # Default is 321 for final run
+    num_frames = 321
     w2c, intrinsics = generate_haunted_house_trajectory(num_frames)
     
     # Save .npz file
@@ -150,11 +148,17 @@ def main():
     print(f"     Starts at (0,0,0) and moves to {w2c[-1, :3, 3]} (w2c space)")
 
     # Save a template captions.json
+    b1 = int(round(num_frames * 0.25))
+    b2 = int(round(num_frames * 0.45))
+    b3 = int(round(num_frames * 0.65))
+    b4 = int(round(num_frames * 0.80))
+    
     captions = {
-        "0": "A camera slowly glides forward approaching the dilapidated front porch of the abandoned wooden house.",
-        "121": "We pass through the broken doorway into the dark entrance hall, panning slowly to the right.",
-        "241": "Inside the dusty room, we pan towards the ruined living room and kitchen filled with cobwebs and decaying furniture.",
-        "361": "We turn towards a creaky, broken wooden staircase on the right, slowly climbing the steps into the upper level."
+        "0": "We advance towards the scary haunted house, getting closer to its old wooden porch.",
+        str(b1 + 1): "We look to the right of the house, scanning the overgrown garden and decayed facade.",
+        str(b2 + 1): "We slowly turn the camera to the left, examining the weathered walls and balconies.",
+        str(b3 + 1): "We turn the camera back to look straight ahead at the front door.",
+        str(b4 + 1): "We enter the house through the doorway, showing the dusty living room, the dining area, and a creaky wooden staircase rising on the right."
     }
     
     json_path = os.path.join(output_dir, "captions.json")

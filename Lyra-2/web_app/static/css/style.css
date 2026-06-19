@@ -171,7 +171,7 @@ body {
 /* Grid Layout */
 .workspace-grid {
     display: grid;
-    grid-template-columns: 420px 1fr;
+    grid-template-columns: 420px minmax(0, 1fr);
     gap: 24px;
     align-items: start;
 }
@@ -712,4 +712,25 @@ h2 {
     grid-template-columns: repeat(2, 1fr);
     margin-top: 4px;
     gap: 16px;
+}
+
+.splat-viewer-panel canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+}
+
+.viewer-section {
+    min-width: 0;
+    overflow: hidden;
+    margin-top: 24px;
+}
+
+.viewer-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
 }

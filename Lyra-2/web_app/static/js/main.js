@@ -35,14 +35,14 @@ const stepRecon = document.getElementById("step-recon");
 const outputCard = document.getElementById("output-card");
 const outputVideo = document.getElementById("output-video");
 const downloadPlyBtn = document.getElementById("download-ply-btn");
+const streamRerunBtn = document.getElementById("stream-rerun-btn");
 
-// Tabs Elements
-const tabVideoBtn = document.getElementById("tab-video-btn");
-const tab3dBtn = document.getElementById("tab-3d-btn");
-const tabVideoContent = document.getElementById("tab-video-content");
-const tab3dContent = document.getElementById("tab-3d-content");
+// Viewer Loader Elements
 const splatViewerContainer = document.getElementById("splat-viewer-container");
 const splatLoading = document.getElementById("splat-loading");
+const splatSpinner = document.getElementById("splat-spinner");
+const splatLoadingText = document.getElementById("splat-loading-text");
+const splatLoadingSubtext = document.getElementById("splat-loading-subtext");
 
 // Resource Card Value Labels
 const gpuUtilVal = document.getElementById("gpu-util-val");
@@ -265,15 +265,10 @@ generateBtn.addEventListener("click", async () => {
         canvases.forEach(c => c.remove());
     }
     if (splatLoading) {
+        if (splatSpinner) splatSpinner.style.display = "none";
+        if (splatLoadingText) splatLoadingText.innerText = "Awaiting 3D Generation...";
+        if (splatLoadingSubtext) splatLoadingSubtext.innerText = "The viewer will automatically display the reconstructed 3D environment once the pipeline finishes.";
         splatLoading.classList.remove("hidden");
-        const loadingText = splatLoading.querySelector("p");
-        if (loadingText) loadingText.innerText = "Loading 3D Gaussian Splats...";
-    }
-    if (tabVideoBtn) {
-        tabVideoBtn.classList.add("active");
-        tab3dBtn.classList.remove("active");
-        tabVideoContent.style.display = "block";
-        tab3dContent.style.display = "none";
     }
     
     appendTerminalLog("[SYSTEM] Initializing 3D Generative Pipeline...\n");
@@ -451,7 +446,6 @@ function updateStatusBanner(stage) {
 // Helper: Display Output Card
 function showFinalOutputs(videoUrl, plyUrl) {
     outputVideo.src = videoUrl;
-    downloadPlyBtn.href = plyUrl;
     currentPlyUrl = plyUrl;
     outputCard.style.display = "block";
     
@@ -462,6 +456,9 @@ function showFinalOutputs(videoUrl, plyUrl) {
         }
     });
     
+    // Load new splats in 3D viewer
+    initSplatViewer(plyUrl);
+    
     // Scroll output card into view
     outputCard.scrollIntoView({ behavior: "smooth" });
 }
@@ -469,41 +466,14 @@ function showFinalOutputs(videoUrl, plyUrl) {
 // ---------------------------------------------------------------------------
 // 4. Interactive 3D Gaussian Splatting Viewer
 // ---------------------------------------------------------------------------
-if (tabVideoBtn && tab3dBtn) {
-    tabVideoBtn.addEventListener("click", () => {
-        tabVideoBtn.classList.add("active");
-        tab3dBtn.classList.remove("active");
-        tabVideoContent.style.display = "block";
-        tab3dContent.style.display = "none";
-    });
-
-    tab3dBtn.addEventListener("click", () => {
-        tabVideoBtn.classList.remove("active");
-        tab3dBtn.classList.add("active");
-        tabVideoContent.style.display = "none";
-        tab3dContent.style.display = "block";
-        initSplatViewer(currentPlyUrl);
-    });
-}
-
 function initSplatViewer(plyUrl) {
     if (!plyUrl) return;
     
-    // If already loaded this specific PLY, do nothing
-    if (splatViewer && splatViewer.loadedUrl === plyUrl) {
-        return;
-    }
-    
-    // Clean up old canvas
-    if (splatViewerContainer) {
-        const canvases = splatViewerContainer.querySelectorAll("canvas");
-        canvases.forEach(c => c.remove());
-    }
-    
     if (splatLoading) {
+        if (splatSpinner) splatSpinner.style.display = "block";
+        if (splatLoadingText) splatLoadingText.innerText = "Loading 3D Gaussian Splats...";
+        if (splatLoadingSubtext) splatLoadingSubtext.innerText = "Controls: Left-Click to Orbit | Right-Click to Pan | WASD to Fly";
         splatLoading.classList.remove("hidden");
-        const loadingText = splatLoading.querySelector("p");
-        if (loadingText) loadingText.innerText = "Loading 3D Gaussian Splats...";
     }
     
     try {
@@ -511,32 +481,100 @@ function initSplatViewer(plyUrl) {
             splatViewer.dispose();
         }
     } catch(e) {
-        console.error(e);
+        console.error("Error disposing splatViewer:", e);
+    }
+    splatViewer = null;
+
+    // Clean up old canvas elements AFTER disposing to prevent removeChild crash
+    if (splatViewerContainer) {
+        const canvases = splatViewerContainer.querySelectorAll("canvas");
+        canvases.forEach(c => c.remove());
+    }
+
+    // Update download and rerun buttons
+    if (downloadPlyBtn) {
+        if (plyUrl.startsWith("blob:") || plyUrl.startsWith("data:")) {
+            downloadPlyBtn.style.display = "none";
+            if (streamRerunBtn) streamRerunBtn.style.display = "none";
+        } else {
+            downloadPlyBtn.href = plyUrl;
+            downloadPlyBtn.style.display = "inline-flex";
+            if (streamRerunBtn) {
+                streamRerunBtn.style.display = "inline-flex";
+                streamRerunBtn.removeAttribute("disabled");
+                streamRerunBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <span>Stream to Rerun</span>
+                `;
+            }
+        }
+    }
+
+    // Update Cinematic Replays & Walkthroughs Section
+    const replaysContainer = document.getElementById("viewer-replays-container");
+    const replayExplorationVideo = document.getElementById("replay-exploration-video");
+    const replayGsVideo = document.getElementById("replay-gs-video");
+
+    if (replaysContainer && replayExplorationVideo && replayGsVideo) {
+        if (plyUrl.startsWith("blob:") || plyUrl.startsWith("data:")) {
+            replaysContainer.style.display = "none";
+        } else {
+            try {
+                const gsVideoUrl = plyUrl.replace('reconstructed_scene.ply', 'gs_trajectory.mp4');
+                
+                const baseDir = plyUrl.substring(0, plyUrl.lastIndexOf('/'));
+                const parentDir = baseDir.substring(0, baseDir.lastIndexOf('/'));
+                const stem = baseDir.substring(baseDir.lastIndexOf('/') + 1).replace('_gs_ours', '');
+                const explorationVideoUrl = parentDir + '/' + stem + '.mp4';
+                
+                replayExplorationVideo.src = explorationVideoUrl;
+                replayGsVideo.src = gsVideoUrl;
+                replaysContainer.style.display = "block";
+                
+                // Trigger reload of video players
+                replayExplorationVideo.load();
+                replayGsVideo.load();
+            } catch (e) {
+                console.error("Failed to parse replay video URLs:", e);
+                replaysContainer.style.display = "none";
+            }
+        }
     }
     
     // Create new viewer
-    splatViewer = new GaussianSplats3D.Viewer({
-        'sharedMemoryForWorkers': false,
-        'selfRenderMode': true,
-        'rootElement': splatViewerContainer,
-        'useBuiltInControls': true,
-        'cameraUp': [0, 1, 0]
-    });
-    
-    splatViewer.loadedUrl = plyUrl;
-    
-    splatViewer.addSplatScene(plyUrl, {
-        'splatAlphaRemovalThreshold': 5,
-        'showLoadingUI': false
-    }).then(() => {
-        if (splatLoading) splatLoading.classList.add("hidden");
-    }).catch(err => {
-        console.error("Failed to load splat scene:", err);
+    try {
+        splatViewer = new GaussianSplats3D.Viewer({
+            'sharedMemoryForWorkers': false,
+            'selfRenderMode': true,
+            'rootElement': splatViewerContainer,
+            'useBuiltInControls': true,
+            'cameraUp': [0, 1, 0]
+        });
+        
+        splatViewer.loadedUrl = plyUrl;
+        
+        splatViewer.addSplatScene(plyUrl, {
+            'showLoadingUI': false
+        }).then(() => {
+            if (splatLoading) splatLoading.classList.add("hidden");
+        }).catch(err => {
+            console.error("Failed to load splat scene:", err);
+            if (splatLoading) {
+                if (splatSpinner) splatSpinner.style.display = "none";
+                if (splatLoadingText) splatLoadingText.innerText = "Error loading 3D environment.";
+                if (splatLoadingSubtext) splatLoadingSubtext.innerText = "Please check the console or use the cinematic replays below.";
+            }
+        });
+    } catch (err) {
+        console.error("Failed to initialize GaussianSplats3D.Viewer:", err);
         if (splatLoading) {
-            const loadingText = splatLoading.querySelector("p");
-            if (loadingText) loadingText.innerText = "Error loading 3D environment.";
+            if (splatSpinner) splatSpinner.style.display = "none";
+            if (splatLoadingText) splatLoadingText.innerText = "WebGL Initialization Failed.";
+            if (splatLoadingSubtext) splatLoadingSubtext.innerText = "Your browser or system might not support WebGL. Please use the cinematic replays below to view the reconstructed 3D walkthroughs.";
         }
-    });
+    }
 }
 
 // Load available trajectories list
@@ -595,7 +633,7 @@ if (stopBtn) {
 // Load PLY history function
 async function loadPlyHistory() {
     try {
-        const res = await fetch("/api/ply_files");
+        const res = await fetch("/api/ply_files?t=" + Date.now());
         if (res.ok) {
             const list = await res.json();
             const currentVal = plyHistorySelect ? plyHistorySelect.value : "";
@@ -609,6 +647,11 @@ async function loadPlyHistory() {
                 });
                 if (currentVal) {
                     plyHistorySelect.value = currentVal;
+                } else if (list.length > 0) {
+                    // Auto-load latest PLY on first load
+                    const latestPly = list[0].url;
+                    plyHistorySelect.value = latestPly;
+                    initSplatViewer(latestPly);
                 }
             }
         }
@@ -651,6 +694,55 @@ if (plyHistorySelect) {
 if (refreshPlyBtn) {
     refreshPlyBtn.addEventListener("click", () => {
         loadPlyHistory();
+    });
+}
+
+// Stream to Rerun action
+if (streamRerunBtn) {
+    streamRerunBtn.addEventListener("click", async () => {
+        const plyUrl = plyHistorySelect ? plyHistorySelect.value : "";
+        if (!plyUrl) {
+            alert("Please select a reconstructed scene to stream first.");
+            return;
+        }
+
+        appendTerminalLog("[SYSTEM] Initiating stream to Rerun server...");
+        streamRerunBtn.setAttribute("disabled", "true");
+        streamRerunBtn.innerHTML = `
+            <span class="spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 6px;"></span>
+            <span>Streaming...</span>
+        `;
+
+        const formData = new FormData();
+        formData.append("ply_url", plyUrl);
+
+        try {
+            const res = await fetch("/api/stream_to_rerun", {
+                method: "POST",
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                appendTerminalLog(`[SYSTEM] Rerun streaming background task started. Rerun Server IP: ${data.rerun_ip}`);
+                connectProgressStream();
+            } else {
+                throw new Error(await res.text());
+            }
+        } catch (err) {
+            appendTerminalLog(`[SYSTEM] ERROR: Failed to stream to Rerun: ${err.message}`);
+        } finally {
+            // Restore button after a short delay
+            setTimeout(() => {
+                streamRerunBtn.removeAttribute("disabled");
+                streamRerunBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <span>Stream to Rerun</span>
+                `;
+            }, 3000);
+        }
     });
 }
 

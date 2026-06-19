@@ -14,8 +14,8 @@
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "gaussian-splats-3d": "https://unpkg.com/@mkkellogg/gaussian-splats-3d@0.4.0/build/gaussian-splats-3d.module.js"
+          "three": "/static/js/three.module.js",
+          "gaussian-splats-3d": "/static/js/gaussian-splats-3d.module.js"
         }
       }
     </script>
@@ -227,65 +227,14 @@
 
                 <!-- Outputs Panel -->
                 <div class="glass-card output-card" id="output-card" style="display: none;">
-                    <div class="output-header-tabs">
-                        <h2>3D Generation Complete</h2>
-                        <div class="tabs-container">
-                            <button class="tab-btn active" id="tab-video-btn">Flythrough Video</button>
-                            <button class="tab-btn" id="tab-3d-btn">Interactive 3D Viewer</button>
-                        </div>
-                    </div>
-                    <p class="card-subtitle" id="output-subtitle">View and download the reconstructed 3D world</p>
+                    <h2>3D Generation Complete</h2>
+                    <p class="card-subtitle" id="output-subtitle">View the generated flythrough video</p>
                     
-                    <!-- Tab Content: Video -->
-                    <div class="tab-content" id="tab-video-content">
-                        <div class="output-player-container">
-                            <video id="output-video" controls autoplay loop muted>
-                                <source src="" type="video/mp4">
-                                Your browser does not support the video tag.
-                            </video>
-                        </div>
-                    </div>
-
-                    <!-- Tab Content: 3D Splat Viewer -->
-                    <div class="tab-content" id="tab-3d-content" style="display: none;">
-                        <!-- 3D Controls panel -->
-                        <div class="splat-controls-bar glass-panel" style="margin-bottom: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.2);">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
-                                <label for="ply-history-select" style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; margin-bottom: 0;">Reconstructed PLY:</label>
-                                <select id="ply-history-select" style="background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); color: #fff; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; outline: none; flex-grow: 1; max-width: 300px;">
-                                    <option value="">-- Select from History --</option>
-                                </select>
-                                <button class="btn btn-secondary" id="refresh-ply-btn" style="padding: 6px 10px; font-size: 12px; width: auto; font-family: var(--font-inter); margin: 0;">
-                                    Refresh
-                                </button>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <button class="btn btn-secondary" id="upload-ply-trigger" style="padding: 6px 14px; font-size: 12px; width: auto; font-family: var(--font-inter); display: flex; align-items: center; gap: 6px; margin: 0;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                                    </svg>
-                                    <span>Upload Local PLY</span>
-                                </button>
-                                <input type="file" id="local-ply-input" accept=".ply" style="display: none;">
-                            </div>
-                        </div>
-
-                        <div id="splat-viewer-container" class="splat-viewer-panel">
-                            <div id="splat-loading" class="splat-loading-overlay">
-                                <span class="spinner"></span>
-                                <p style="font-weight: 500; font-family: var(--font-outfit);">Loading 3D Gaussian Splats...</p>
-                                <p style="font-size: 12px; color: var(--text-secondary);">Controls: Left-Click to Orbit | Right-Click to Pan | WASD to Fly</p>
-                            </div>
-                        </div>
-                    </div>
- 
-                    <div class="output-actions">
-                        <a href="" id="download-ply-btn" class="btn btn-secondary" download>
-                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                            </svg>
-                            <span>Download 3D Gaussians (PLY)</span>
-                        </a>
+                    <div class="output-player-container">
+                        <video id="output-video" controls autoplay loop muted>
+                            <source src="" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
                     </div>
                 </div>
 
@@ -303,6 +252,96 @@
             </section>
 
         </main>
+
+        <!-- 3D Reconstructed World Section -->
+        <section class="glass-card viewer-section" id="viewer-section">
+            <div class="viewer-header">
+                <h2>Interactive 3D World Viewer</h2>
+                <p class="card-subtitle">Explore the reconstructed 3D environments and Gaussian Splats</p>
+            </div>
+            
+            <!-- 3D Controls panel -->
+            <div class="splat-controls-bar glass-panel" style="margin-bottom: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.2); flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1; min-width: 280px; flex-wrap: wrap;">
+                    <label for="ply-history-select" style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; white-space: nowrap; margin-bottom: 0;">Reconstructed PLY:</label>
+                    <select id="ply-history-select" style="background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); color: #fff; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; outline: none; flex-grow: 1; max-width: 300px; min-width: 150px;">
+                        <option value="">-- Select from History --</option>
+                    </select>
+                    <button class="btn btn-secondary" id="refresh-ply-btn" style="padding: 6px 10px; font-size: 12px; width: auto; font-family: var(--font-inter); margin: 0;">
+                        Refresh
+                    </button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="btn btn-secondary" id="upload-ply-trigger" style="padding: 6px 14px; font-size: 12px; width: auto; font-family: var(--font-inter); display: flex; align-items: center; gap: 6px; margin: 0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                        </svg>
+                        <span>Upload Local PLY</span>
+                    </button>
+                    <input type="file" id="local-ply-input" accept=".ply" style="display: none;">
+                </div>
+            </div>
+
+            <div id="splat-viewer-container" class="splat-viewer-panel">
+                <div id="splat-loading" class="splat-loading-overlay">
+                    <span class="spinner" id="splat-spinner" style="display: none;"></span>
+                    <p id="splat-loading-text" style="font-weight: 500; font-family: var(--font-outfit); margin: 0;">No 3D Environment Loaded</p>
+                    <p id="splat-loading-subtext" style="font-size: 12px; color: var(--text-secondary); margin: 0;">Select a reconstruction from the history dropdown or upload a local PLY file to start exploring.</p>
+                </div>
+            </div>
+
+            <div class="output-actions" style="margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <a href="" id="download-ply-btn" class="btn btn-secondary" download style="display: none; margin: 0; width: auto;">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    <span>Download 3D Gaussians (PLY)</span>
+                </a>
+                <button id="stream-rerun-btn" class="btn btn-primary" style="display: none; margin: 0; width: auto; background: linear-gradient(135deg, #a855f7, #6366f1); box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3); border: none; font-family: var(--font-inter); font-size: 13px; font-weight: 500; padding: 10px 20px; align-items: center; justify-content: center; gap: 8px; border-radius: var(--radius-sm); color: #fff; cursor: pointer; transition: all 0.2s ease;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <span>Stream to Rerun</span>
+                </button>
+            </div>
+
+            <!-- Cinematic Replays & Walkthroughs Section -->
+            <div id="viewer-replays-container" class="viewer-replays-container glass-panel" style="display: none; margin-top: 20px; padding: 16px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--panel-border);">
+                <h3 style="font-family: var(--font-outfit); font-size: 15px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; color: #a855f7;">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/>
+                        <line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                        <line x1="17" y1="7" x2="22" y2="7"/>
+                    </svg>
+                    <span>Cinematic Replays & Walkthroughs</span>
+                </h3>
+                <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; margin-top: 0;">Replay the generated camera exploration path and the reconstructed 3D splat walkthrough video.</p>
+                
+                <div class="replays-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                    <!-- Exploration Video -->
+                    <div class="replay-card" style="background: rgba(0, 0, 0, 0.2); border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.05); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                        <h4 style="font-size: 12px; font-weight: 600; color: #fff; margin: 0;">Exploration Video (Wan2.1)</h4>
+                        <video id="replay-exploration-video" controls loop muted style="width: 100%; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.1); background: #000; aspect-ratio: 1.77;">
+                            <source src="" type="video/mp4">
+                        </video>
+                    </div>
+                    
+                    <!-- GS Walkthrough Render -->
+                    <div class="replay-card" style="background: rgba(0, 0, 0, 0.2); border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.05); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                        <h4 style="font-size: 12px; font-weight: 600; color: #fff; margin: 0;">3D Splat Reconstructed Walkthrough</h4>
+                        <video id="replay-gs-video" controls loop muted style="width: 100%; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.1); background: #000; aspect-ratio: 1.77;">
+                            <source src="" type="video/mp4">
+                        </video>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </div>
 
     <!-- main JS as Module -->

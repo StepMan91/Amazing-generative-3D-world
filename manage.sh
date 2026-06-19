@@ -145,6 +145,35 @@ start_all() {
         fi
     fi
 
+    # 2b. Check and start Rerun container
+    local rerun_name="rerun_server"
+    local rerun_exists
+    rerun_exists=$(docker ps -a --filter "name=^/${rerun_name}$" --format '{{.Names}}')
+
+    if [ -z "${rerun_exists}" ]; then
+        log_info "Rerun container '${rerun_name}' does not exist. Creating new container..."
+        if ! docker image inspect rerun_server:latest &>/dev/null; then
+            log_info "Building rerun_server:latest image..."
+            docker build -t rerun_server:latest -f "${REPO_ROOT}/Dockerfile.rerun" "${REPO_ROOT}"
+        fi
+        docker run -d --name "${rerun_name}" \
+          -p 9090:9090 \
+          -p 9876:9876 \
+          --restart unless-stopped \
+          rerun_server:latest
+        log_success "Rerun container created and started."
+    else
+        local rerun_running
+        rerun_running=$(docker ps --filter "name=^/${rerun_name}$" --format '{{.Names}}')
+        if [ -z "${rerun_running}" ]; then
+            log_info "Starting stopped Rerun container '${rerun_name}'..."
+            docker start "${rerun_name}"
+            log_success "Rerun container started."
+        else
+            log_success "Rerun container '${rerun_name}' is already running."
+        fi
+    fi
+
     # 3. Check if dependencies need compilation (fallback)
     if ! docker exec "${CONTAINER_NAME}" python3 -c "import vipe_ext" &>/dev/null; then
         log_warn "Extensions not found in the container. Automatically running setup..."
@@ -210,6 +239,16 @@ stop_all() {
     else
         log_success "Container is already stopped."
     fi
+
+    # Stop Rerun container
+    local rerun_name="rerun_server"
+    local rerun_running
+    rerun_running=$(docker ps --filter "name=^/${rerun_name}$" --format '{{.Names}}')
+    if [ -n "${rerun_running}" ]; then
+        log_info "Stopping Rerun container '${rerun_name}'..."
+        docker stop "${rerun_name}"
+        log_success "Rerun container stopped."
+    fi
 }
 
 # Show status
@@ -235,6 +274,19 @@ show_status() {
         echo -e "  Docker Container: ${GREEN}Running / En cours d'exécution (${container_status})${NC}"
     else
         echo -e "  Docker Container: ${YELLOW}Stopped / Arrêté (${container_status})${NC}"
+    fi
+
+    # 2b. Rerun Container Status
+    local rerun_name="rerun_server"
+    local rerun_status
+    rerun_status=$(docker ps -a --filter "name=^/${rerun_name}$" --format '{{.Status}}')
+    if [ -z "${rerun_status}" ]; then
+        echo -e "  Rerun Container: ${RED}Not Created${NC}"
+    elif [[ "${rerun_status}" == Up* ]]; then
+        echo -e "  Rerun Container: ${GREEN}Running (${rerun_status})${NC}"
+        echo -e "  Rerun Web Viewer: ${CYAN}http://localhost:9090${NC}"
+    else
+        echo -e "  Rerun Container: ${YELLOW}Stopped (${rerun_status})${NC}"
     fi
 
     # 3. Web Dashboard Status

@@ -11,7 +11,7 @@ from typing import Optional
 import psutil
 import pynvml
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -356,8 +356,77 @@ async def stop_pipeline():
     return {"status": "idle"}
 
 
+@app.post("/api/stream_to_rerun")
+async def stream_to_rerun(ply_url: str = Form(...)):
+    if not ply_url.startswith("/outputs/"):
+        raise HTTPException(status_code=400, detail="Invalid PLY URL format.")
+        
+    rel_path = ply_url.replace("/outputs/", "", 1)
+    ply_path = WORKSPACE_ROOT / "outputs" / rel_path
+    
+    if not ply_path.exists():
+        raise HTTPException(status_code=404, detail="PLY file not found.")
+        
+    cameras_path = ply_path.parent / "cameras.npz"
+    cameras_arg = []
+    if cameras_path.exists():
+        cameras_arg = ["--cameras", str(cameras_path)]
+        
+    # Find Rerun IP
+    rerun_ip = "172.17.0.1" # Default docker host gateway IP
+    try:
+        res = subprocess.run(["ip", "route"], capture_output=True, text=True, timeout=2)
+        for line in res.stdout.splitlines():
+            if line.startswith("default"):
+                rerun_ip = line.split()[2]
+                break
+    except:
+        pass
+        
+    # Start the python script and capture its output to log history
+    cmd = [
+        "python3", str(BASE_DIR / "visualize_in_rerun.py"),
+        "--ply", str(ply_path),
+        "--rerun-ip", rerun_ip
+    ] + cameras_arg
+    
+    add_log(f"[SYSTEM] Streaming scene to Rerun at {rerun_ip}:9876...\n")
+    add_log(f"[SYSTEM] Command: {' '.join(cmd)}\n")
+    
+    def run_stream():
+        env = os.environ.copy()
+        env["LD_PRELOAD"] = "" # Disable cuda fake if it causes issues with rerun
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env
+            )
+            while True:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                add_log(line)
+            proc.wait()
+            if proc.returncode == 0:
+                add_log("[SYSTEM] Successfully completed Rerun stream!\n")
+            else:
+                add_log(f"[SYSTEM] Rerun stream exited with error code {proc.returncode}\n")
+        except Exception as e:
+            add_log(f"[SYSTEM] ERROR: Failed to run Rerun streaming: {e}\n")
+            
+    # Run in background thread
+    threading.Thread(target=run_stream, daemon=True).start()
+    
+    return {"status": "started", "rerun_ip": rerun_ip}
+
+
 @app.get("/api/ply_files")
-async def list_ply_files():
+async def list_ply_files(response: Response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     ply_list = []
     
     # Scan zoomgs outputs
@@ -368,7 +437,7 @@ async def list_ply_files():
                 if f.endswith(".ply"):
                     full_path = Path(root) / f
                     try:
-                        rel_path = full_path.relative_to(WORKSPACE_ROOT)
+                        rel_path = full_path.relative_to(WORKSPACE_ROOT / "outputs")
                         url = f"/outputs/{rel_path}"
                         label = f"Preset: {full_path.parent.name.replace('_gs_ours', '')}"
                         ply_list.append({"label": label, "url": url})
@@ -383,7 +452,7 @@ async def list_ply_files():
                 if f.endswith(".ply"):
                     full_path = Path(root) / f
                     try:
-                        rel_path = full_path.relative_to(WORKSPACE_ROOT)
+                        rel_path = full_path.relative_to(WORKSPACE_ROOT / "outputs")
                         url = f"/outputs/{rel_path}"
                         label = f"Custom: {full_path.parent.name.replace('_gs_ours', '')}"
                         ply_list.append({"label": label, "url": url})
