@@ -1,4 +1,4 @@
 FROM python:3.10-slim
 RUN pip install --no-cache-dir rerun-sdk==0.33.0
-EXPOSE 9090 9876
+EXPOSE 9090 9876 9877
 CMD ["rerun", "--serve-web", "--web-viewer-port", "9090", "--port", "9876", "--bind", "0.0.0.0"]

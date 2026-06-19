@@ -557,7 +557,8 @@ function initSplatViewer(plyUrl) {
         
         splatViewer.addSplatScene(plyUrl, {
             'splatAlphaRemovalThreshold': 15,
-            'showLoadingUI': false
+            'showLoadingUI': false,
+            'orientation': [1, 0, 0, 0]
         }).then(() => {
             if (splatLoading) splatLoading.classList.add("hidden");
             splatViewer.start();
@@ -727,6 +728,8 @@ if (streamRerunBtn) {
             if (res.ok) {
                 const data = await res.json();
                 appendTerminalLog(`[SYSTEM] Rerun streaming background task started. Rerun Server IP: ${data.rerun_ip}`);
+                appendTerminalLog(`[SYSTEM] To view the stream, open the Rerun Web Viewer in your browser at:`);
+                appendTerminalLog(`[SYSTEM] -> http://localhost:9090/?url=ws://localhost:9877`);
                 connectProgressStream();
             } else {
                 throw new Error(await res.text());

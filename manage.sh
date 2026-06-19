@@ -159,6 +159,7 @@ start_all() {
         docker run -d --name "${rerun_name}" \
           -p 9090:9090 \
           -p 9876:9876 \
+          -p 9877:9877 \
           --restart unless-stopped \
           rerun_server:latest
         log_success "Rerun container created and started."

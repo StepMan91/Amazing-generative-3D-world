@@ -70,8 +70,8 @@ def main():
     else:
         print(f"[RERUN] Using all {len(positions)} points")
 
-    # Set coordinate space standard (RUB: Right-Up-Back)
-    rr.log("world", rr.ViewCoordinates.RUB, static=True)
+    # Set coordinate space standard (RDF: Right-Down-Forward)
+    rr.log("world", rr.ViewCoordinates.RDF, static=True)
 
     # Stream points to Rerun
     print("[RERUN] Streaming point cloud to Rerun server...")
